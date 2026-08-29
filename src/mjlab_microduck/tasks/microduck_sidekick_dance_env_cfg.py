@@ -106,6 +106,22 @@ def sidekick_no_forward(env, std: float = 0.08) -> torch.Tensor:
 
 
 def make_microduck_sidekick_dance_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+    # Inherited critic terms (foot_air_time, foot_contact_forces) still look
+    # up this name from make_velocity_env_cfg(). Dance rewards use the
+    # per-foot sensors below.
+    feet_ground_cfg = ContactSensorCfg(
+        name="feet_ground_contact",
+        primary=ContactMatch(
+            mode="geom",
+            pattern=r"^(left_foot_collision|right_foot_collision)$",
+            entity="robot",
+        ),
+        secondary=ContactMatch(mode="body", pattern="terrain"),
+        fields=("found", "force"),
+        reduce="netforce",
+        num_slots=1,
+        track_air_time=True,
+    )
     left_support = ContactSensorCfg(
         name="left_support_contact",
         primary=ContactMatch(
@@ -141,7 +157,12 @@ def make_microduck_sidekick_dance_env_cfg(play: bool = False) -> ManagerBasedRlE
 
     cfg = make_velocity_env_cfg()
     cfg.scene.entities = {"robot": MICRODUCK_STANDUP_ROBOT_CFG}
-    cfg.scene.sensors = (left_support, right_support, self_collision_cfg)
+    cfg.scene.sensors = (
+        feet_ground_cfg,
+        left_support,
+        right_support,
+        self_collision_cfg,
+    )
     cfg.viewer.body_name = "trunk_base"
     cfg.episode_length_s = EPISODE_LENGTH_S
 
@@ -223,6 +244,12 @@ def make_microduck_sidekick_dance_env_cfg(play: bool = False) -> ManagerBasedRlE
         del cfg.observations["actor"].terms["height_scan"]
     if "height_scan" in cfg.observations["critic"].terms:
         del cfg.observations["critic"].terms["height_scan"]
+    # Critic gait terms need feet_ground_contact (added above). Sanitize in
+    # case mjlab 1.3.0 still wires a missing default sensor name.
+    for _term in ("foot_air_time", "foot_contact_forces"):
+        if _term in cfg.observations["critic"].terms:
+            term = cfg.observations["critic"].terms[_term]
+            term.params = {**(term.params or {}), "sensor_name": feet_ground_cfg.name}
 
     gravity_term_name = "projected_gravity"
     cfg.observations["actor"].terms[gravity_term_name] = deepcopy(
