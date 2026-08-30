@@ -21,6 +21,12 @@ Right sidebar:
 - Internet: **On**
 - Persistence: **Files** (so `/kaggle/working` survives a Save Version)
 
+Or from this repo, `kaggle-notebook/kernel-metadata.json` already has those flags (`machine_shape`: `NvidiaTeslaT4`, internet on, private). Push and run:
+
+```bash
+kaggle kernels push -p kaggle-notebook --accelerator NvidiaTeslaT4 -t 43200
+```
+
 ## 2. Cells (run in order)
 
 **GPU check**
@@ -82,18 +88,29 @@ else:
 !uv sync
 ```
 
+The trainer defaults to wandb. Kaggle has no wandb login, so every train cell must (1) keep wandb offline and (2) pass `--agent.logger tensorboard`. `WANDB_MODE=disabled` / `WANDB_DISABLED=true` is not enough: rsl_rl still constructs `WandbLogWriter` and `wandb.init()` raises `UsageError: No API key configured`.
+
+```python
+import os
+os.environ["PATH"] = os.path.expanduser("~/.local/bin") + os.pathsep + os.environ["PATH"]
+os.environ["WANDB_MODE"] = "offline"
+os.environ["WANDB_SILENT"] = "true"
+```
+
 **smoke test (CPU-ok, burns almost no GPU quota, proves the task exists)**
 
 ```python
-!uv run train Mjlab-SideKickDance-Flat-MicroDuck --env.scene.num-envs 64 --agent.max-iterations 5
+%cd /kaggle/working/microduck_rl
+!uv run train Mjlab-SideKickDance-Flat-MicroDuck --env.scene.num-envs 64 --agent.max-iterations 5 --agent.logger tensorboard
 ```
 
-If this errors on the task id, the register cell did not stick. If it OOMs, the GPU is not attached.
+If this errors on the task id, the register cell did not stick. If it OOMs, the GPU is not attached. If wandb asks for an API key, the logger flag did not stick.
 
 **real train**
 
 ```python
-!uv run train Mjlab-SideKickDance-Flat-MicroDuck --env.scene.num-envs 1024
+%cd /kaggle/working/microduck_rl
+!uv run train Mjlab-SideKickDance-Flat-MicroDuck --env.scene.num-envs 1024 --agent.logger tensorboard
 ```
 
 Leave the tab open. Session dies at 12 h. Checkpoints land under `logs/`. Download them before you stop the session, or **Save Version** so `/kaggle/working` is kept.
@@ -120,6 +137,7 @@ That mp4 is the clip. The Hugging Face sandbox will not load it until someone wi
 
 ```bash
 uv run train Mjlab-SideKickDance-Flat-MicroDuck --env.scene.num-envs 1024 \
+    --agent.logger tensorboard \
     --agent.run-name resume --agent.load-checkpoint model_XXXX.pt --agent.resume True
 ```
 

@@ -100,7 +100,7 @@ def sidekick_hip_yaw_track(env, std: float = 0.25) -> torch.Tensor:
 
 def sidekick_no_forward(env, std: float = 0.08) -> torch.Tensor:
     """Penalty-shaped: stay put. Walking is the cheap fake dance."""
-    v = env.scene["robot"].data.root_lin_vel_b
+    v = env.scene["robot"].data.root_link_lin_vel_b
     forward = v[:, 0].square()
     return torch.exp(-forward / (std * std))
 
